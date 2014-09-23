@@ -11,6 +11,10 @@ common_src_files := \
 	Process.cpp \
 	Ext4.cpp \
 	Fat.cpp \
+	Ntfs.cpp \
+	Exfat.cpp \
+	Hfsplus.cpp \
+	Iso9660.cpp \
 	Loop.cpp \
 	Devmapper.cpp \
 	ResponseCode.cpp \
@@ -81,6 +85,8 @@ LOCAL_SRC_FILES := \
 LOCAL_C_INCLUDES := $(common_c_includes)
 
 LOCAL_CFLAGS := -Werror=format
+LOCAL_CFLAGS += -DHAS_NTFS_3G
+LOCAL_CFLAGS += -DHAS_EXFAT_FUSE
 
 ifeq ($(TARGET_HW_DISK_ENCRYPTION),true)
 LOCAL_C_INCLUDES += $(TARGET_CRYPTFS_HW_PATH)
