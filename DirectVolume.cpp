@@ -213,22 +213,26 @@ void DirectVolume::handlePartitionAdded(const char *devpath, NetlinkEvent *evt) 
         return;
     }
 #ifdef PARTITION_DEBUG
-    SLOGD("Dv:partAdd: part_num = %d, minor = %d\n", part_num, minor);
+    SLOGD("Dv:partAdd: devpath %s, label %s, part_num = %d, minor = %d\n", devpath, getLabel(), part_num, minor);
 #endif
     if (part_num >= MAX_PARTITIONS) {
         SLOGE("Dv:partAdd: ignoring part_num = %d (max: %d)\n", part_num, MAX_PARTITIONS-1);
     } else {
         mPartMinors[part_num -1] = minor;
     }
-    mPendingPartMap &= ~(1 << part_num);
+    // psw0523 fix for partition > 1
+    //mPendingPartMap &= ~(1 << part_num);
+    mPendingPartMap = 0;
 
     if (!mPendingPartMap) {
 #ifdef PARTITION_DEBUG
-        SLOGD("Dv:partAdd: Got all partitions - ready to rock!");
+        SLOGD("Dv:partAdd: Got all partitions - ready to rock!, mRetryMount %d", mRetryMount);
 #endif
         if (getState() != Volume::State_Formatting) {
             setState(Volume::State_Idle);
-            if (mRetryMount == true) {
+            // psw0523 fix for usb storage connected booting NO Mount Problem ==> early mount
+            //if (mRetryMount == true) {
+            if (mRetryMount == true || !strncmp(getLabel(), "usbdisk", 7)) {
                 mRetryMount = false;
                 mountVol();
             }
@@ -315,7 +319,7 @@ void DirectVolume::handlePartitionRemoved(const char *devpath, NetlinkEvent *evt
     if (state != Volume::State_Mounted && state != Volume::State_Shared) {
         return;
     }
-        
+
     if ((dev_t) MKDEV(major, minor) == mCurrentlyMountedKdev) {
         /*
          * Yikes, our mounted partition is going away!
@@ -332,7 +336,7 @@ void DirectVolume::handlePartitionRemoved(const char *devpath, NetlinkEvent *evt
                                              msg, false);
 
         if (Volume::unmountVol(true, false)) {
-            SLOGE("Failed to unmount volume on bad removal (%s)", 
+            SLOGE("Failed to unmount volume on bad removal (%s)",
                  strerror(errno));
             // XXX: At this point we're screwed for now
         } else {

@@ -412,6 +412,8 @@ int Volume::mountVol() {
         }
     }
 
+    // psw0523 fix for partition > 1
+#if 0
     for (i = 0; i < n; i++) {
         char devicePath[255];
 
@@ -461,6 +463,59 @@ int Volume::mountVol() {
         mCurrentlyMountedKdev = deviceNodes[i];
         return 0;
     }
+#else
+    {
+        i = n - 1;
+        char devicePath[255];
+
+        sprintf(devicePath, "/dev/block/vold/%d:%d", MAJOR(deviceNodes[i]),
+                MINOR(deviceNodes[i]));
+
+        SLOGI("%s being considered for volume %s\n", devicePath, getLabel());
+
+        errno = 0;
+        setState(Volume::State_Checking);
+
+        if (Fat::check(devicePath)) {
+            if (errno == ENODATA) {
+                SLOGW("%s does not contain a FAT filesystem\n", devicePath);
+                return -1;
+            }
+            errno = EIO;
+            /* Badness - abort the mount */
+            SLOGE("%s failed FS checks (%s)", devicePath, strerror(errno));
+            setState(Volume::State_Idle);
+            return -1;
+        }
+
+        errno = 0;
+        int gid;
+
+        if (Fat::doMount(devicePath, getMountpoint(), false, false, false,
+                AID_MEDIA_RW, AID_MEDIA_RW, 0007, true)) {
+            SLOGE("%s failed to mount via VFAT (%s)\n", devicePath, strerror(errno));
+            return -1;
+        }
+
+        extractMetadata(devicePath);
+
+        if (providesAsec && mountAsecExternal() != 0) {
+            SLOGE("Failed to mount secure area (%s)", strerror(errno));
+            umount(getMountpoint());
+            setState(Volume::State_Idle);
+            return -1;
+        }
+
+        char service[64];
+        snprintf(service, 64, "fuse_%s", getLabel());
+        property_set("ctl.start", service);
+
+        setState(Volume::State_Mounted);
+        mCurrentlyMountedKdev = deviceNodes[i];
+        return 0;
+    }
+#endif
+// end psw0523
 
     SLOGE("Volume %s found no suitable devices for mounting :(\n", getLabel());
     setState(Volume::State_Idle);
